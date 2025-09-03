@@ -102,7 +102,15 @@ def train(args):
             instance_gt = instance_gt.cuda()
             if args.depth_sup:
                 final_depth_map = final_depth_map.cuda()
+            # 损失函数计算 - 实现论文4.1节的多任务损失函数
+            # 对应论文公式: L_total = λ_seg*L_seg + λ_embed*L_embed + λ_dir*L_dir + λ_depth*L_depth
+            
+            # 语义分割损失 - 对应论文公式(4)
+            # L_seg: 加权二元交叉熵损失，处理正负样本不平衡
             seg_loss = loss_fn(semantic, semantic_gt)
+            
+            # 实例嵌入损失 - 对应论文公式(5)
+            # L_embed = α*L_var + β*L_dist + γ*L_reg
             if args.instance_seg:
                 var_loss, dist_loss, reg_loss = embedded_loss_fn(
                     embedding, instance_gt)
@@ -111,6 +119,8 @@ def train(args):
                 dist_loss = 0
                 reg_loss = 0
 
+            # 方向预测损失 - 用于车道线方向估计
+            # L_dir: 方向分类的交叉熵损失
             if args.direction_pred:
                 direction_gt = direction_gt.cuda()
                 lane_mask = (1 - direction_gt[:, 0]).unsqueeze(1)
@@ -124,11 +134,15 @@ def train(args):
                 direction_loss = 0
                 angle_diff = 0
 
+            # 深度监督损失 - 对应论文3.1节的深度感知训练
+            # L_depth: 深度分布预测的监督损失
             if args.depth_sup:
                 depth_loss = depth_loss_func(depth, final_depth_map)
             else:
                 depth_loss = 0
 
+            # 总损失计算 - 多任务学习的加权组合
+            # 对应论文公式: L_total = λ_seg*L_seg + λ_var*L_var + λ_dist*L_dist + λ_dir*L_dir + λ_depth*L_depth
             final_loss = seg_loss * args.scale_seg + var_loss * args.scale_var + \
                 dist_loss * args.scale_dist + direction_loss * args.scale_direction + depth_loss*args.scale_depth
             final_loss.backward()
@@ -186,38 +200,39 @@ if __name__ == '__main__':
     parser.add_argument('--version', type=str, default='v1.0-trainval',
                         choices=['v1.0-trainval', 'v1.0-mini'])
 
-    # model config
-    parser.add_argument("--model", type=str, default='SuperFusion')
+    # 模型配置 - 对应论文3节网络架构设计
+    parser.add_argument("--model", type=str, default='SuperFusion')  # 模型名称，SuperFusion多级融合架构
 
-    # training config
-    parser.add_argument("--nepochs", type=int, default=30)
-    parser.add_argument("--max_grad_norm", type=float, default=5.0)
-    parser.add_argument("--pos_weight", type=float, default=2.13)
-    parser.add_argument("--bsz", type=int, default=4)
-    parser.add_argument("--nworkers", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=0.1)
-    parser.add_argument("--lr_gamma", type=float, default=0.1)
-    parser.add_argument("--weight_decay", type=float, default=1e-7)
+    # 训练参数配置 - 对应论文4.2节实验设置
+    parser.add_argument("--nepochs", type=int, default=30)        # 训练轮数
+    parser.add_argument("--max_grad_norm", type=float, default=5.0) # 梯度裁剪阈值，防止梯度爆炸
+    parser.add_argument("--pos_weight", type=float, default=2.13)   # 正样本权重，处理类别不平衡
+    parser.add_argument("--bsz", type=int, default=4)               # 批次大小
+    parser.add_argument("--nworkers", type=int, default=10)         # 数据加载器工作进程数
+    parser.add_argument("--lr", type=float, default=0.1)            # 学习率
+    parser.add_argument("--lr_gamma", type=float, default=0.1)      # 学习率衰减因子
+    parser.add_argument("--weight_decay", type=float, default=1e-7) # 权重衰减，L2正则化
 
     # finetune config
     parser.add_argument('--finetune', action='store_true')
     parser.add_argument('--modelf', type=str, default=None)
 
-    # data config
-    parser.add_argument("--thickness", type=int, default=5)
-    parser.add_argument("--depth_downsample_factor", type=int, default=4)
-    parser.add_argument("--image_size", nargs=2, type=int, default=[256, 704])
-    parser.add_argument("--depth_image_size", nargs=2, type=int, default=[256, 704])
+    # 数据配置 - 图像预处理和BEV网格参数
+    parser.add_argument("--thickness", type=int, default=5)         # 车道线厚度，用于标注生成
+    parser.add_argument("--depth_downsample_factor", type=int, default=4) # 深度图下采样因子
+    parser.add_argument("--image_size", nargs=2, type=int, default=[256, 704])       # 输入图像尺寸 [高度, 宽度]
+    parser.add_argument("--depth_image_size", nargs=2, type=int, default=[256, 704]) # 深度图像尺寸
+    # BEV网格配置 - 定义3D空间到BEV空间的映射，对应论文3.1节
     parser.add_argument("--xbound", nargs=3, type=float,
-                        default=[-90.0, 90.0, 0.15])
+                        default=[-90.0, 90.0, 0.15])  # X轴范围和分辨率 [最小值, 最大值, 步长]
     parser.add_argument("--ybound", nargs=3, type=float,
-                        default=[-15.0, 15.0, 0.15])
+                        default=[-15.0, 15.0, 0.15])  # Y轴范围和分辨率
     parser.add_argument("--zbound", nargs=3, type=float,
-                        default=[-10.0, 10.0, 20.0])
+                        default=[-10.0, 10.0, 20.0])  # Z轴范围和分辨率
     parser.add_argument("--zgrid", nargs=3, type=float,
-                        default=[-3.0, 1.5, 0.15])
+                        default=[-3.0, 1.5, 0.15])    # Z轴网格范围，用于高度分层
     parser.add_argument("--dbound", nargs=3, type=float,
-                        default=[2.0, 90.0, 1.0])
+                        default=[2.0, 90.0, 1.0])     # 深度范围和分辨率，对应论文公式(1)中的深度区间
 
     # embedding config
     parser.add_argument('--instance_seg', action='store_true')
@@ -232,12 +247,13 @@ if __name__ == '__main__':
     # depth config
     parser.add_argument('--depth_sup', action='store_true')
 
-    # loss config
-    parser.add_argument("--scale_seg", type=float, default=1.0)
-    parser.add_argument("--scale_var", type=float, default=1.0)
-    parser.add_argument("--scale_dist", type=float, default=1.0)
-    parser.add_argument("--scale_direction", type=float, default=0.2)
-    parser.add_argument("--scale_depth", type=float, default=1.0)
+    # 损失函数权重配置 - 对应论文4.1节多任务损失函数
+    # L_total = λ_seg*L_seg + λ_var*L_var + λ_dist*L_dist + λ_dir*L_dir + λ_depth*L_depth
+    parser.add_argument("--scale_seg", type=float, default=1.0)       # λ_seg: 语义分割损失权重
+    parser.add_argument("--scale_var", type=float, default=1.0)       # λ_var: 类内方差损失权重
+    parser.add_argument("--scale_dist", type=float, default=1.0)      # λ_dist: 类间距离损失权重
+    parser.add_argument("--scale_direction", type=float, default=0.2) # λ_dir: 方向预测损失权重
+    parser.add_argument("--scale_depth", type=float, default=1.0)     # λ_depth: 深度监督损失权重
     parser.add_argument("--opt", type=str, default='sgd')
 
     parser.add_argument('--use_depth_enc', action='store_true')
