@@ -52,6 +52,8 @@ mkdir -p checkpoints
 
 # 2. 下载DeepLabV3预训练模型
 wget https://download.pytorch.org/models/deeplabv3_resnet101_coco-586e9e4e.pth -O checkpoints/deeplabv3_resnet101_coco-586e9e4e.pth
+# 放置到 checkpoints/ 目录下
+
 
 # 3. 创建runs目录
 mkdir -p runs
