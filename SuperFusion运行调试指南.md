@@ -33,6 +33,7 @@ python -c "import torch; print(f'PyTorch版本: {torch.__version__}'); print(f'C
 # 1. 访问 https://www.nuscenes.org/ 注册并下载
 # 2. 下载完整数据集和地图扩展包
 # - Full dataset (v1.0)
+# (快速运行验证可下载mini dataset）
 # - Map expansion
 
 # 3. 解压到指定目录
@@ -43,6 +44,9 @@ python -c "import torch; print(f'PyTorch版本: {torch.__version__}'); print(f'C
 # ├── sweeps/
 # ├── v1.0-trainval/
 # └── v1.0-test/
+
+#注意根据下载的Full dataset版本，可能需要更改部分文件名称
+
 ```
 
 #### 下载预训练模型
@@ -64,6 +68,18 @@ mkdir -p runs
 ```
 
 ## 🏃‍♂️ 运行代码
+
+### 0. 快速运行测试
+```bash
+python vis_prediction.py \
+  --modelf runs/model.pt \
+  --instance_seg --direction_pred --depth_sup --pretrained --add_depth_channel \
+  --version v1.0-trainval \
+  --dataroot /root/SuperFusion/data_nus
+
+#输出结果位于 /superFusion/saving results
+```
+
 
 ### 1. 训练模型
 
