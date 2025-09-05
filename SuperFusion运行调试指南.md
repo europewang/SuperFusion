@@ -77,7 +77,7 @@ python vis_prediction.py \
   --version v1.0-trainval \
   --dataroot /root/SuperFusion/data_nus
 
-#输出结果位于 /superFusion/saving results
+#输出结果位于 /superFusion/result/SuperFusion 中
 ```
 
 
